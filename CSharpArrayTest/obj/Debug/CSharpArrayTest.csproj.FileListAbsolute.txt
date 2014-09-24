@@ -1,0 +1,10 @@
+C:\Users\Gabriel\Source\Repos\CsharpArrayTest\CSharpArrayTest\bin\Debug\CSharpArrayTest.exe.config
+C:\Users\Gabriel\Source\Repos\CsharpArrayTest\CSharpArrayTest\obj\Debug\CSharpArrayTest.csprojResolveAssemblyReference.cache
+C:\Users\Gabriel\Source\Repos\CsharpArrayTest\CSharpArrayTest\bin\Debug\CSharpArrayTest.exe
+C:\Users\Gabriel\Source\Repos\CsharpArrayTest\CSharpArrayTest\bin\Debug\CSharpArrayTest.pdb
+C:\Users\Gabriel\Source\Repos\CsharpArrayTest\CSharpArrayTest\bin\Debug\BitMiracle.LibTiff.NET.dll
+C:\Users\Gabriel\Source\Repos\CsharpArrayTest\CSharpArrayTest\bin\Debug\BitMiracle.LibTiff.NET.xml
+C:\Users\Gabriel\Source\Repos\CsharpArrayTest\CSharpArrayTest\obj\Debug\CSharpArrayTest.exe
+C:\Users\Gabriel\Source\Repos\CsharpArrayTest\CSharpArrayTest\obj\Debug\CSharpArrayTest.pdb
+C:\ProjectLena\Repos\CSharpArrayTest\CSharpArrayTest\bin\Debug\CSharpArrayTest.exe.config
+C:\ProjectLena\Repos\CSharpArrayTest\CSharpArrayTest\obj\Debug\CSharpArrayTest.exe

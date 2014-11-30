@@ -53,18 +53,18 @@ namespace CSharpArrayTest
             //int[] networkSize = new int[4] { 511, 511, 511, 121 };
             int[] networkSize = new int[4] { 511, 511, 511, 169 };
             //int[] inputsPerSample = new int[4] { 170, 512, 512, 512 };
-            //string fileName = "Lena_Y_gauss_0.1_samples_400_patch_11_rmse_4.0.wgt";
-            //byte[,] denoised = MLMVN.fdenoiseNeural2(noisy, 3, fileName, 4, networkSize, 384);
+            string fileName = "Lena_Y_gauss_0.1_rmse_3.0_session_2.wgt";
+            byte[,] denoised = MLMVN.fdenoiseNeural2(noisy, 3, fileName, 4, networkSize, 384);
             //TiffFunctions.WriteToFile(denoised, width, height, bits, pixel, dpiX, dpiY);
 
-            string fileNameS = "Lena_Y_Gauss_0.1_Samples_300_Patches_13x13.txt";
+            //string fileNameS = "Lena_Y_Gauss_0.1_Samples_300_Patches_13x13.txt";
             //string fileNameW = "Lena_Y_gauss_0.1_rmse_3.0_session_2.wgt";
             //int[,] output = MLMVN.MLMVN_TEST(fileNameS, 200, fileNameW, 4, networkSize, inputsPerSample, 384);
             //Complex[][,] weights = MLMVN.MLMVN_Learning(fileNameS, 200, fileNameW, 4, networkSize, inputsPerSample, 5.0, 0.0, 384, true);
 
-            string fileName = "testWeightSave.wgt";
-            Complex[][,] weights = MLMVN.MLMVN_Learning(fileNameS, 200, " ", 4, networkSize, 300.0, 0.0, 384, true);
-            MLMVN.saveMlmvnWeights(fileName, weights, networkSize);
+            //string fileName = "testWeightSave.wgt";
+            //Complex[][,] weights = MLMVN.MLMVN_Learning(fileNameS, 200, " ", 4, networkSize, 300.0, 0.0, 384, true);
+            // MLMVN.saveMlmvnWeights(fileName, weights, networkSize);
             return 0;
         } // end main
     } // end class

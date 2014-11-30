@@ -885,6 +885,262 @@ namespace CSharpArrayTest
 
             return cleanIm;
         } // end method
+
+        public static byte[,] fdenoiseNeural3(byte[,] noisyIm, int overlap, string fileName, int layer, int[] networkSize, int numberofsectors)
+        {
+            /*
+             *   noisyIm: an image corrupted by AWG noise
+             *        the sliding window stride of the denoising 
+             *        process (a smaller stride will usually provide better results).
+             *        The pixels of the clean image are assumed to be approximately in 
+             *        the range 0..255.
+             *   overlap: the number of overlaps for two consecutive patches measured in pixels.
+             *        Those pixels that are overlapped will be averaged.
+             *   fileName: a string which specified the name of the weight file.
+             *   layer: Number of layers of the network.
+             *   networkSize: Defines the number of neurons in each layer
+             *   inputsPerSample: defines the number of inputs in each neuron`
+            */
+            #region Initialization
+            // determine number of samples and populate them
+            int[] inputsPerSample = new int[layer];
+            inputsPerSample[0] = networkSize[layer - 1] + 1;
+            for (int i = 1; i < layer; i++)
+                inputsPerSample[i] = networkSize[0] + 1;
+            // end for
+
+            Console.WriteLine("Initializing Components");
+            Console.Write("Loading weights...");
+            // load the weights
+            Complex[][,] weights = loadMlmvnWeights(fileName, layer, networkSize, inputsPerSample);
+            Console.Write("done.\n");
+
+
+            Console.WriteLine("Configuring Patch Size...");
+            // size of input / output patch
+            int patchSz = (int)Math.Sqrt(weights[0].GetLength(1));
+            int patchSzOut = (int)Math.Sqrt(weights[layer - 1].GetLength(0));
+            // Size of each sector on unit circle
+
+            Console.WriteLine("done.\nInput patch size is: {0}", patchSz);
+            Console.WriteLine("Output patch size is: {0}", patchSzOut);
+
+            // calculate the difference of the patches
+            int p_diff = (patchSz - patchSzOut) / 2;
+            // check if input is larger than output. If so, extend the image
+            int height = noisyIm.GetLength(0);
+            int origHeight = height;
+            int width = noisyIm.GetLength(1);
+            int origWidth = width;
+            if (p_diff > 0)
+            {
+                noisyIm = new byte[height + p_diff * 2, width + p_diff * 2];
+                noisyIm = TiffFunctions.MirrorImage(noisyIm, height, width, p_diff);
+                // if extended the image, update the size
+                height = noisyIm.GetLength(0);
+                width = noisyIm.GetLength(1);
+            }
+
+            #region Patch range configuration
+            // calculate how many pixels will be skipped for each patch
+            int interval = patchSz - overlap;
+            // offsetX and offsetY determine the number of "leftover" pixels on the right and bottom edges.
+            int offsetX = (width - patchSz) % interval;
+            int offsetY = (height - patchSz) % interval;
+            // reserve the array to indicate the index of patches. include one position for the fist patch.  And reserve extra one position just in case 
+            // we need to fill the offset
+            int[] range_x = new int[(width - patchSz) / interval + 2];
+            int[] range_y = new int[(height - patchSz) / interval + 2];
+            int pos = 0;
+            // fill the arrays with intervals.  ignore the last element because we don't know if it's necessary yet
+            for (int i = 0; i < range_x.GetLength(0) - 1; i++)
+            {
+                range_x[i] = pos;
+                pos += interval;
+            }
+            pos = 0;
+            for (int i = 0; i < range_y.GetLength(0) - 1; i++)
+            {
+                range_y[i] = pos;
+                pos += interval;
+            }
+            // end for
+
+            // correct last index if necessary
+            // if offsetX and Y are equal to 0, that means no fitting is necessary.  Therefore, just resize the array to have
+            // one less length.  Else, fill the last element of the array with the index according to the offsets
+            if (offsetX == 0)
+                Array.Resize(ref range_x, range_x.GetLength(0) - 1);
+            else
+                range_x[range_x.GetLength(0) - 1] = width - patchSz;
+            // end if
+            if (offsetY == 0)
+                Array.Resize(ref range_y, range_y.GetLength(0) - 1);
+            else
+                range_y[range_y.GetLength(0) - 1] = height - patchSz;
+            // end if
+            #endregion
+            Console.Write("Difference of the patche size is: {0}", p_diff);
+            Console.WriteLine(", beginning variable initialization...");
+
+            // pre-instantiate complex 2d-arrays
+            // patch of interest
+            byte[,] cleanIm = new byte[origHeight, origWidth];
+            byte[,] counter = new byte[origHeight, origWidth]; // counts the overlapped patch, then later store the processed image.
+            double[,] inputArray = new double[patchSz, patchSz];
+            Complex[,] CinputArray = new Complex[patchSz, patchSz];
+            // output patch to be stored to actual image
+            byte[,] outputArray = new byte[patchSz, patchSz];
+            byte[] output = new byte[(int)Math.Pow(patchSz, 2)];
+            // used when patch needs to be transformed to 1d array
+            Complex[] S = new Complex[inputArray.Length];
+            // store outputs of network
+            Complex[][] outputNeurons = new Complex[layer][];
+            double[] dOutputNeurons = new double[networkSize[layer - 1]];
+            // instanciate a jagged array to store outputs
+            for (int i = 0; i < layer; i++)
+                outputNeurons[i] = new Complex[networkSize[i]];
+            // end for
+            Complex sum = new Complex(0, 0);
+            S[0] = new Complex(1, 0);
+            // instantiate imaginary unit
+            Complex complex1 = new Complex(0.0, 1.0);
+            // processIndex as in old code
+            int offset = ((patchSzOut - 3) / 2) + 1;
+            double bb = (2 * Math.PI) / numberofsectors;
+
+            Console.WriteLine("...done.\nBeginning Processing.");
+            #endregion
+            // --------------- Processing Begins ------------------------------
+            // process each samples
+            for (int row = 0; row < range_y.GetLength(0); row++) // for each row
+            {
+                for (int col = 0; col < range_x.GetLength(0); col++) // for each column
+                {
+
+                    #region process first layer
+                    // process first layer
+                    int ii = 0;
+                    byte[,] src = TiffFunctions.CreatePatch(noisyIm, range_y[row], range_x[col], patchSz);
+                    // upcast to double
+                    Array.Copy(src, inputArray, src.Length);
+                    // transformation of inputs into complex plane
+                    for (int i = 0; i < patchSz; i++)
+                        for (int j = 0; j < patchSz; j++)
+                            CinputArray[i, j] = Exp(complex1 * 2 * Math.PI * inputArray[i, j] / numberofsectors);
+                    // end nested for loop
+                    // transform to 1d array
+                    for (int i = 0; i < patchSz; i++)
+                        for (int j = 0; j < patchSz; j++)
+                            S[i * patchSz + j] = CinputArray[i, j];
+                    // end for loop
+                    #endregion
+                    #region calculate weighted sum of first layer and its activation
+                    // calculate weighted sum & activation
+                    for (int i = 0; i < networkSize[0]; i++)
+                    {
+                        for (int j = 1; j < inputsPerSample[0]; j++)
+                        {
+                            sum = sum + weights[ii][i, j] * S[j - 1];
+                        }
+                        sum = sum + weights[ii][i, 0];
+                        outputNeurons[ii][i] = sum;
+                        sum = new Complex(0, 0);
+                    } // end for
+
+                    // apply continuous activation
+                    for (int t = 0; t < networkSize[ii]; t++)
+                        outputNeurons[ii][t] /= Complex.Abs(outputNeurons[ii][t]);
+                    // end for
+                    #endregion
+                    #region calculate weighted sum of second to last layer
+                    // ----------------- Process second to last hidden layers, then output layer
+                    for (ii = 1; ii < layer - 1; ii++)
+                    {
+                        for (int i = 0; i < networkSize[ii]; i++)
+                        {
+                            for (int j = 1; j < inputsPerSample[ii]; j++)
+                            {
+                                sum = sum + weights[ii][i, j] * outputNeurons[ii - 1][j - 1];
+                            }
+                            sum = sum + weights[ii][i, 0];
+                            outputNeurons[ii][i] = sum;
+                            sum = new Complex(0, 0);
+                        } // end for
+                        // apply contiunous activation
+                        for (int t = 0; t < networkSize[ii]; t++)
+                            outputNeurons[ii][t] /= Complex.Abs(outputNeurons[ii][t]);
+                        // end for
+                    } // end for ii
+
+
+                    // output layer
+                    ii = layer - 1; // set to last layer
+                    // calculate the weighted sum
+                    for (int i = 0; i < networkSize[ii]; i++)
+                    {
+                        for (int j = 1; j < inputsPerSample[ii]; j++)
+                        {
+                            sum = sum + weights[ii][i, j] * outputNeurons[ii - 1][j - 1];
+                        }
+                        sum = sum + weights[ii][i, 0];
+                        outputNeurons[ii][i] = sum;
+                        sum = new Complex(0, 0);
+                    } // end for
+
+                    for (int jj = 0; jj < networkSize[ii]; jj++)
+                    {
+                        // calculate discrete output
+                        // get angle
+                        dOutputNeurons[jj] = Math.Atan2(outputNeurons[ii][jj].Imaginary, outputNeurons[ii][jj].Real);
+                        if (dOutputNeurons[jj] < 0)
+                            dOutputNeurons[jj] = 2 * Math.PI + dOutputNeurons[jj];
+                        // end if
+                        // round
+                        dOutputNeurons[jj] = Math.Truncate(dOutputNeurons[jj] / bb);
+                        //dOutputNeurons[jj] = Math.Floor(dOutputNeurons[jj]/bb);
+
+                        if (dOutputNeurons[jj] > 255)
+                            if (dOutputNeurons[jj] < 320)
+                                dOutputNeurons[jj] = 255;
+                            else
+                                dOutputNeurons[jj] = 0;
+                        // end if 
+                        // convert results to byte
+                        output[jj] = Convert.ToByte(dOutputNeurons[jj]);
+                    } // end for
+
+                    #endregion second to last layer
+                    #region Process image
+                    // add to the actual image
+                    for (int i = 0; i < patchSzOut; i++)
+                        for (int j = 0; j < patchSzOut; j++)
+                        {
+                            //if (counter[range_y[row] + i, range_x[col] + j] == 0)
+                            //{
+                            cleanIm[range_y[row] + i, range_x[col] + j] += outputArray[i, j];
+                            counter[range_y[row] + i, range_x[col] + j]++;
+                            //}
+                        }
+                    // end for
+
+                    #endregion
+                } // end col for loop
+                Console.WriteLine("Patch {0} of {1} done.", row + 1, range_y.Length);
+            } // end row for loop
+            #region Average
+            // Average
+            for (int row = 0; row < origHeight; row++) // for each row
+            {
+                for (int col = 0; col < origWidth; col++) // for each column
+                {
+                    cleanIm[row, col] /= counter[row, col];
+                    counter[row, col] = Convert.ToByte(cleanIm[row, col]);
+                }
+            }
+            #endregion
+            return counter;            
+        }
         // -------------------------- Useful Functions ------------------------------------------------------------------
         // exponential of complex numbers
         public static Complex Exp(Complex Exponent)
